@@ -1,5 +1,11 @@
 package memtable
 
+import (
+	"sort"
+
+	"github.com/singlemonad/lsmdb/record"
+)
+
 const (
 	MemtableLengthLimit = 100
 )
@@ -38,4 +44,19 @@ func (m *Memtable) Keys() []string {
 		retKeys = append(retKeys, key)
 	}
 	return retKeys
+}
+
+func (m *Memtable) TransferToBlock() []*record.Block {
+	retBlocks := make([]*record.Block, 0)
+	keys := m.Keys()
+	sort.Strings(keys)
+	block := record.NewBlock()
+	for _, key := range keys {
+		if err := block.Append(record.NewRecord(key, m.entries[key])); err != nil {
+			retBlocks = append(retBlocks, block)
+			block = record.NewBlock()
+		}
+	}
+	retBlocks = append(retBlocks, block)
+	return retBlocks
 }

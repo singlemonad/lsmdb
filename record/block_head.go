@@ -6,6 +6,10 @@ import (
 	"unsafe"
 )
 
+const (
+	blockHeadSize = uint64(unsafe.Sizeof(uint64(0)))
+)
+
 type BlockHead struct {
 	recordAmount int
 }
