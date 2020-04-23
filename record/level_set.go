@@ -20,30 +20,57 @@ const (
 
 // levelSet represent files on disk
 type LevelSet struct {
+	dir string
 	mutex  sync.Mutex
 	levels []*Level
 }
 
-func NewLevelSet(numLevels int) *LevelSet {
+func NewLevelSet(numLevels int, dir string) *LevelSet {
 	return &LevelSet{
+		dir: dir,
 		mutex:  sync.Mutex{},
 		levels: make([]*Level, numLevels),
 	}
 }
 
-func (vs *LevelSet) Contraction(blocks []*Block) {
+func (vs *LevelSet) Contraction(blocks []*Block) error {
 	vs.mutex.Lock()
 	defer vs.mutex.Unlock()
 
+	// if level0 is nil, create one
+	if vs.levels[0] == nil {
+		level0, err := NewLevel(0, vs.dir)
+		if err != nil {
+			return err
+		}
+		vs.levels[0] = level0
+	}
 	vs.levels[0].MergeDown(blocks[0].FetchFirstKey(), blocks[len(blocks)-1].FetchLastKey(), blocks)
+
 	for currLevel := 0; currLevel < len(vs.levels); currLevel++ {
 		if len(vs.levels[currLevel].files) > LevelFileLimit {
-			blocks, _ = vs.levels[currLevel].MergeUp()
-			vs.levels[currLevel+1].MergeDown(blocks[0].FetchFirstKey(), blocks[len(blocks)-1].FetchLastKey(), blocks)
+			blocks, err := vs.levels[currLevel].MergeUp()
+			if err != nil {
+				return err
+			}
+
+			// if levelN if nil, create one
+			if vs.levels[currLevel+1] == nil {
+				levelN, err := NewLevel(currLevel + 1, vs.dir)
+				if err != nil {
+					return err
+				}
+				vs.levels[currLevel+1] = levelN
+			}
+
+			if err = vs.levels[currLevel+1].MergeDown(blocks[0].FetchFirstKey(), blocks[len(blocks)-1].FetchLastKey(), blocks); err != nil {
+				return err
+			}
 		} else {
 			break
 		}
 	}
+	return nil
 }
 
 type levelBlockIterator struct {
@@ -229,7 +256,7 @@ func (l *Level) MergeDown(startKey, endKey string, targets []*Block) error {
 	}
 
 	for !myEnd || !targetEnd {
-		// reinit myInterator
+		// reinit myIterator
 		for myIterator.End() && myEnd == false {
 			myblock, err = blockIter.nextBlock()
 			if err != nil {
@@ -282,7 +309,7 @@ func (l *Level) newMergeFile(index int) (*util.File, error) {
 	return util.OpenWriteOnlyFile(fmt.Sprintf("%s/merge-%d", l.dir, index))
 }
 
-// chosen block set to merge to higer level
+// chosen block set to merge to higher level
 func (l *Level) MergeUp() ([]*Block, error) {
 	blockIter, err := newLevelBlockIterator(l, []int{l.choseMergeFile()})
 	if err != nil {
@@ -307,8 +334,6 @@ func (l *Level) choseMergeFile() int {
 	return l.files[0]
 }
 
-// 输入startKey与endKey，查找需要被合并的文件列表
-// 输出的列表中的值为待合并文件在当前层中的编号
 func (l *Level) findMergeFiles(startKey, endKey string) ([]int, error) {
 	blockIter, err := newLevelBlockIterator(l, l.files)
 	if err != nil {

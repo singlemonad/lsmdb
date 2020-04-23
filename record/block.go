@@ -12,10 +12,7 @@ const (
 )
 
 // Block is a set of sort Record
-// Block 没有随机写入需求，只有随机读取需求
-// Block在磁盘中存储格式：
 // Head长度 | Head | 记录
-// 如果一条记录在Block中存不下 -- 现在只支持最大长度为 BlockSize - blockHeadSize
 type Block struct {
 	head      *BlockHead       // blockHead 需要落盘
 	directory *RecordDirectory // recordDirectory 不落盘，每次将block读入内存时构建recordDirectory

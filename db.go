@@ -7,29 +7,36 @@ import (
 	"go.uber.org/zap"
 )
 
-type LsmDBMessageType = int
+type DBMessageType = int
 
 const (
 	exitMessage         = 0
 	memtableFullMessage = 1
+
+	levelTotal = 10
 )
 
 type LsmDB struct {
 	logger     *zap.SugaredLogger
+	dir        string
 	mutable    *memtable.Memtable
 	immutable  *memtable.Memtable
 	versionSet *record.LevelSet
 	loopC      chan LsmDBMessageType
 }
 
-func OpenLsmdb(name string) *LsmDB {
+func OpenLsmdb(dir string) (*LsmDB, error) {
 	lsmdb := &LsmDB{
-		logger: zap.NewExample().Sugar(),
-		loopC:  make(chan LsmDBMessageType),
+		logger:  zap.NewExample().Sugar(),
+		dir:     dir,
+		mutable: memtable.NewMemtable(),
+		versionSet: record.NewLevelSet(levelTotal, dir),
+		loopC:   make(chan LsmDBMessageType),
 	}
+
 	go lsmdb.mainThread()
 
-	return lsmdb
+	return lsmdb, nil
 }
 
 func (db *LsmDB) Get(key string) ([]byte, error) {
